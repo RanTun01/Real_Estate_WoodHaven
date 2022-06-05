@@ -1,0 +1,299 @@
+#Install
+install.packages("tidyverse")
+install.packages("lubridate")
+install.packages("dplyr")
+install.packages("magrittr")
+install.packages("ggplot2")
+install.packages("tibbletime")
+install.packages("factoextra")
+install.packages("forecast")
+install.packages("scales")
+install.packages("corrplot")
+#load needed libraries
+library(readr)
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(magrittr)
+library(ggplot2)
+library(tibbletime)
+library(factoextra)
+library(forecast)
+library(scales)
+library(corrplot)
+
+
+#Analysis
+
+Data_Joined <- read_csv(file.choose())
+
+#nogrouping
+OGNoGroupCWS<-Data_Joined%>%
+  mutate(SALE_YEAR=year(SALE_DATE)) %>%
+  select(NEIGHBORHOOD_ID,NEIGHBORHOOD_NAME, 
+         TYPE, 
+         SALE_DATE, 
+         SALE_PRICE, 
+         GROSS_SQUARE_FEET, 
+         BUILDING_CLASS_FINAL_ROLL, 
+         COMMERCIAL_UNITS, 
+         SALE_YEAR)%>%
+  filter(NEIGHBORHOOD_NAME=="WHITESTONE",
+         SALE_PRICE>100,
+         GROSS_SQUARE_FEET>500)
+
+#grouping
+OGGroupWSC<-Data_Joined%>%
+  mutate(SALE_YEAR=year(SALE_DATE)) %>%
+  select(NEIGHBORHOOD_ID,
+         NEIGHBORHOOD_NAME, 
+         TYPE, 
+         SALE_DATE,
+         SALE_PRICE, 
+         GROSS_SQUARE_FEET, 
+         BUILDING_CLASS_FINAL_ROLL, 
+         COMMERCIAL_UNITS, 
+         SALE_YEAR)%>%
+  filter(NEIGHBORHOOD_NAME=="WHITESTONE",
+         SALE_PRICE>100,
+         GROSS_SQUARE_FEET>500)%>%
+  group_by(SALE_YEAR)
+
+
+#t1
+WS_Com<-OGGroupWSC%>%
+  mutate(SALE_YEAR=year(SALE_DATE)) %>%
+  select(NEIGHBORHOOD_ID,
+         NEIGHBORHOOD_NAME, 
+         TYPE,
+         SALE_DATE, 
+         SALE_YEAR, 
+         SALE_PRICE, 
+         GROSS_SQUARE_FEET)%>%
+  filter(NEIGHBORHOOD_NAME=="WHITESTONE",
+         TYPE=="COMMERCIAL",
+         SALE_PRICE>100, 
+         GROSS_SQUARE_FEET>500,
+         SALE_YEAR>=2009)%>%
+  group_by(SALE_YEAR)
+
+WS_ComNoGroup<-OGNoGroupCWS%>%
+  mutate(SALE_YEAR=year(SALE_DATE)) %>%
+  select(NEIGHBORHOOD_ID,
+         NEIGHBORHOOD_NAME, 
+         TYPE,
+         SALE_DATE, 
+         SALE_YEAR,
+         SALE_PRICE,
+         GROSS_SQUARE_FEET)%>%
+  filter(NEIGHBORHOOD_NAME=="WHITESTONE",
+         TYPE=="COMMERCIAL",
+         SALE_PRICE>100, 
+         GROSS_SQUARE_FEET>500,
+         SALE_YEAR>=2009)
+
+#t1ab
+summarise(WS_Com, TotalSales=sum(SALE_PRICE))
+summarise(WS_Com, MeanSales=mean(SALE_PRICE),SDSales=sd(SALE_PRICE),n=n())
+summarise(WS_Com, MedSales=median(SALE_PRICE))
+summarise(WS_Com, MeanSQFT=mean(GROSS_SQUARE_FEET))
+
+summarise(WS_ComNoGroup, TotalSales=sum(SALE_PRICE))
+summarise(WS_ComNoGroup, MeanSales=mean(SALE_PRICE),SDSales=sd(SALE_PRICE),n=n())
+summarise(WS_ComNoGroup, MedSales=median(SALE_PRICE))
+summarise(WS_ComNoGroup, MeanSQFT=mean(GROSS_SQUARE_FEET))
+
+#t1c
+fivenum(WS_Com$SALE_PRICE)
+fivenum(WS_ComNoGroup$GROSS_SQUARE_FEET)
+
+#total Sales by Status
+PROPWS<-Data_Joined%>%
+  select(NEIGHBORHOOD_ID,
+         NEIGHBORHOOD_NAME,
+         TYPE,
+         SALE_DATE,
+         SALE_PRICE,
+         GROSS_SQUARE_FEET)%>%
+  mutate(SALE_YEAR=year(SALE_DATE)) %>%
+  group_by(TYPE)%>%
+  filter(NEIGHBORHOOD_NAME=="WHITESTONE",
+         SALE_PRICE>10,
+         GROSS_SQUARE_FEET>500, 
+         SALE_YEAR>=2009)
+ 
+#t1d
+PROP2WS<-prop.table(tapply(PROPWS$SALE_PRICE, list(PROPWS$TYPE),(sum)))%>%
+  as.data.frame()%>%
+  rename(Proportion = ".")
+
+#desciptive Stats
+#t1ef
+Biniding_WSCom<-cbind(mean(WS_Com$SALE_PRICE),mean(WS_Com$GROSS_SQUARE_FEET),
+                          median(WS_Com$SALE_PRICE),
+                          median(WS_Com$GROSS_SQUARE_FEET),
+                          sd(WS_Com$SALE_PRICE),
+                          sd(WS_Com$GROSS_SQUARE_FEET),
+                          cor(WS_Com$SALE_PRICE,WS_Com$GROSS_SQUARE_FEET),
+                          cov(WS_Com$SALE_PRICE,WS_Com$GROSS_SQUARE_FEET))
+
+WSComMatrix<-matrix(Biniding_WSCom,ncol = 8,byrow = T)
+colnames(WSComMatrix)<-c("Mean SALE_PRICE",
+                    "Mean GROSS_SQUARE_FEET",
+                    "Median SALE_PRICE",
+                    "Median GROSS_SQUARE_FEET",
+                    "Standard Dev of SALE_PRICE",
+                    "Standard Dev of GROSS_SQUARE_FEET",
+                    "Correlation",
+                    "Covariance")
+rownames<-c("Neighborhood WHITESTONE")
+
+#t2
+CleanHistorical<-Data_Joined%>%
+  mutate(SALE_YEAR=year(SALE_DATE))%>%
+  filter(SALE_PRICE>10,GROSS_SQUARE_FEET>500)
+
+#t2a
+DataAfter2010<-filter(.data = CleanHistorical,
+                      RESIDENTIAL_UNITS!=0,
+                      SALE_YEAR>=2010,
+                      TYPE=="RESIDENTIAL")%>%
+  as.data.frame()
+
+#t2
+GroupedData<-group_by(DataAfter2010,NEIGHBORHOOD_NAME)%>%
+  filter(NEIGHBORHOOD_NAME!="N/A")%>%
+  summarise(MeanSalePrice=mean(SALE_PRICE),
+            MeanGrossSQFT=mean(GROSS_SQUARE_FEET),
+            UnitsSold=sum(RESIDENTIAL_UNITS),
+            SALES = n())%>%
+  as.data.frame()
+
+#t2 outlier
+GroupedData<-group_by(DataAfter2010,NEIGHBORHOOD_NAME)%>%
+  filter(NEIGHBORHOOD_NAME!="N/A",NEIGHBORHOOD_NAME!="KIPS BAY",
+         NEIGHBORHOOD_NAME!="MORNINGSIDE HEIGHTS",
+         NEIGHBORHOOD_NAME!="MIDTOWN CBD",
+         NEIGHBORHOOD_NAME!="SOUTHBRIDGE"
+         )%>%
+  summarise(MeanSalePrice=mean(SALE_PRICE),
+            MeanGrossSQFT=mean(GROSS_SQUARE_FEET),
+            UnitsSold=sum(RESIDENTIAL_UNITS),
+            SALES = n())%>%
+  as.data.frame()
+
+
+
+#t2
+zscores<-scale(GroupedData[c(-1)])%>%
+  as.data.frame()
+#t2
+fviz_nbclust(zscores,kmeans,method="wss")
+#t2
+fviz_nbclust(zscores,kmeans,method="silhouette")
+
+ggplot(zscores)+geom_point(mapping = aes(x=MeanGrossSQFT, 
+                                         y=MeanSalePrice,
+                                         size=UnitsSold))
+
+k<-kmeans(zscores,centers=4)
+DataClusterNum<-cbind(GroupedData,k$cluster)
+
+ggplot(DataClusterNum)+geom_point(mapping = aes(x=MeanGrossSQFT, 
+                                                y=MeanSalePrice,
+                                                size=UnitsSold,
+                                                color=k$cluster))
+
+fviz_cluster(k,data=zscores)
+
+#T-Test
+PrepTTest<-Data_Joined%>%
+  mutate(SALE_YEAR=year(SALE_DATE))%>%
+  filter(SALE_PRICE>10,GROSS_SQUARE_FEET>500)
+#test 2
+
+Woodhavendata<-filter(.data = PrepTTest,
+                      NEIGHBORHOOD_NAME=="WOODHAVEN",
+                      SALE_YEAR>2009,
+                      TYPE=="RESIDENTIAL")
+
+KewGardensdata<-filter(.data = PrepTTest,
+                       NEIGHBORHOOD_NAME=="KEW GARDENS",
+                       SALE_YEAR>2009,
+                       TYPE=="RESIDENTIAL")
+
+t.test(x = Woodhavendata$SALE_PRICE,
+       y=KewGardensdata$SALE_PRICE,
+       alternative = "two.sided",
+       conf.level=.95)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
+  
